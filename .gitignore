@@ -2,3 +2,8 @@
 .Rhistory
 .RData
 .Ruserdata
+Rplots.pdf
+# NGS 2020 competition data: licence unconfirmed, not redistributed
+train.csv
+test.csv
+sample_submission.csv
