@@ -107,8 +107,22 @@ final_model <- xgb.train(
 # Feature importance (top 20)
 imp <- xgb.importance(model = final_model)
 print(head(imp, 20))
-# Optional plot:
-xgb.plot.importance(imp, top_n = 20)
+dir.create("plots", showWarnings = FALSE)
+png("plots/feature_importance.png", width = 900, height = 700)
+xgb.plot.importance(imp, top_n = 20, main = "Top 20 features (gain)")
+dev.off()
+
+# CV AUC by boosting round
+log <- cv$evaluation_log
+png("plots/cv_auc.png", width = 900, height = 600)
+plot(log$iter, log$test_auc_mean, type = "l", col = "red", lwd = 2,
+     ylim = range(c(log$test_auc_mean, log$train_auc_mean)),
+     xlab = "Boosting round", ylab = "AUC", main = "5-fold CV AUC")
+lines(log$iter, log$train_auc_mean, col = "grey40", lwd = 2, lty = 2)
+abline(v = best_nrounds, lty = 3)
+legend("bottomright", c("CV (held-out folds)", "Training folds", "Best round"),
+       col = c("red", "grey40", "black"), lty = c(1, 2, 3), lwd = c(2, 2, 1))
+dev.off()
 
 # Diagnostic: training AUC (not your real score, just sanity check)
 train_pred <- predict(final_model, dtrain)
@@ -119,16 +133,16 @@ cat("Training AUC (diagnostic):", as.numeric(train_auc), "\n")
 dtest <- xgb.DMatrix(data = X_test)
 test_pred <- predict(final_model, dtest)
 
+submission <- tibble(
+  id = test_raw$id,
+  overqualified = test_pred
+)
+
 hist(
   submission$overqualified,
   breaks = 30,
   main = "Predicted Underemployment Probabilities",
   xlab = "Probability"
-)
-
-submission <- tibble(
-  id = test_raw$id,
-  overqualified = test_pred
 )
 
 readr::write_csv(submission, "submission.csv")

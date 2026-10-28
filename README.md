@@ -26,6 +26,8 @@ Files provided:
 - `test.csv` – test data (no labels)  
 - `sample_submission.csv` – submission format  
 
+The data files are not included in this repo: they come from the National Graduates Survey (NGS 2020) via the challenge, and I haven't confirmed the licence allows redistribution. Put `train.csv` and `test.csv` in the repo folder to run the scripts.
+
 Key characteristics:
 - Survey-encoded categorical variables  
 - Missing values present  
@@ -60,6 +62,10 @@ Key characteristics:
 
 Early stopping was applied to prevent overfitting.
 
+### 4. Logistic Regression comparison
+- `LogisticRegression.qmd`: same preprocessing, plain logistic regression on all predictors
+- 5-fold CV ROC AUC: 0.680 (seed 345)
+
 ---
 
 ## 📈 Results
@@ -67,6 +73,12 @@ Early stopping was applied to prevent overfitting.
 - **Training AUC (diagnostic):** ~0.87  
 - **Cross-Validation AUC:** ~0.69–0.70  
 - Predictions show a healthy probability distribution (no collapse to 0/1)
+
+![5-fold CV AUC by boosting round](plots/cv_auc.png)
+
+![Top 20 XGBoost features by gain](plots/feature_importance.png)
+
+Both plots are written by `final_submission.R`.
 
 The gap between training and CV AUC highlights the importance of **regularization and generalization** when working with survey data.
 

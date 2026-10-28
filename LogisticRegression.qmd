@@ -1,82 +1,58 @@
 ---
-title: "Logistic Regression"
+title: "Logistic Regression baseline"
 format: html
 ---
 
-# Libraries
+A simple, explainable baseline to compare against XGBoost (`final_submission.R`).
+Same preprocessing: every predictor is a factor, missing answers get their own
+"Missing" level, then one-hot encoding. Scored with 5-fold cross-validated ROC AUC.
+
+# Libraries and data
 ```{r}
 #| message: false
 #| warning: false
 library(tidyverse)
-library(ranger)
-library(randomForest)
+library(pROC)
 
 set.seed(345)
-train_set <- read_csv("train.csv")
+train_raw <- read_csv("train.csv", show_col_types = FALSE)
 ```
 
-# Dropping NAs/ Missing Values 
+# Preprocessing
 ```{r}
-train_set <- drop_na(train_set) %>% select(-c(id))
-train_set <- train_set %>%
-  mutate(DDIS_FL = case_when(
-    DDIS_FL == "With disability"    ~ "1.0",
-    DDIS_FL == "Without disability" ~ "2.0"
-  ))
+y <- train_raw$overqualified
 
-## This data is so incredibly messy:( We need to look over every column and convert strings into the right form like what I did above with DDIS_FL. Then, we need to pick out variables from the kaggle list that we want to know more about. We'll remove missing values that pertain to those variables in particular. Then we will build a logistic regression model with the variables we are interested in. I've already included some into the model fit under the "Log Regression" heading.
+x <- train_raw %>%
+  select(-id, -overqualified) %>%
+  mutate(across(everything(), ~ fct_na_value_to_level(as.factor(.x), level = "Missing")))
 
-#for(i in 1:ncol(train_set)){
-#  train_set <- train_set[train_set[,i] != 9,]
-#}
-#train_set <- train_set[train_set$PGMCIPAP != 99,]
-#train_set <- train_set[train_set$BEF_160 != 99,]
+# One-hot encode once on the full set so every fold has the same columns
+X <- as.data.frame(model.matrix(~ . - 1, data = x))
+dim(X)
 ```
 
-# Change Column Structure
+# 5-fold cross-validated AUC
 ```{r}
-train_set <- train_set %>%
-  mutate(
-    overqualified = as.factor(overqualified),
-    
-    CERTLEVP  = as.factor(CERTLEVP),
-    PGMCIPAP  = as.factor(PGMCIPAP),
-    PGM_P034  = as.factor(PGM_P034),
-    PGM_P036  = as.factor(PGM_P036),
-    HLOSGRDP  = as.factor(HLOSGRDP),
-    PREVLEVP  = as.factor(PREVLEVP),
-    
-    PGM_280A  = as.factor(PGM_280A),
-    PGM_280B  = as.factor(PGM_280B),
-    PGM_280C  = as.factor(PGM_280C),
-    PGM_280F  = as.factor(PGM_280F),
-    PGM_P401  = as.factor(PGM_P401),
-    
-    STULOANS  = as.factor(STULOANS),
-    DBTOTGRD  = as.factor(DBTOTGRD),
-    SCHOLARP  = as.factor(SCHOLARP),
-    
-    GRADAGEP  = as.factor(GRADAGEP),
-    CTZSHIPP  = as.factor(CTZSHIPP),
-    VISBMINP  = as.factor(VISBMINP),
-    DDIS_FL   = as.factor(DDIS_FL),
-    
-    PAR1GRD   = as.factor(PAR1GRD),
-    PAR2GRD   = as.factor(PAR2GRD),
-    
-    BEF_P140  = as.factor(BEF_P140),
-    BEF_160   = as.numeric(BEF_160)
-  )
+#| warning: false
+folds <- sample(rep(1:5, length.out = nrow(X)))
 
+fold_auc <- map_dbl(1:5, function(k) {
+  fit <- glm(y ~ ., data = cbind(y = y, X)[folds != k, ], family = binomial)
+  pred <- predict(fit, newdata = X[folds == k, ], type = "response")
+  as.numeric(auc(roc(y[folds == k], pred, quiet = TRUE)))
+})
+
+fold_auc
+mean(fold_auc)
 ```
 
-# Log Regression
+# Full model: strongest effects
 ```{r}
-log_fit <- glm(
-  overqualified ~ CERTLEVP + PGMCIPAP + HLOSGRDP + BEF_P140 + BEF_160,
-  data = train_set,
-  family = binomial
-)
-summary(log_fit)
-```
+#| warning: false
+log_fit <- glm(y ~ ., data = cbind(y = y, X), family = binomial)
 
+broom::tidy(log_fit) %>%
+  filter(term != "(Intercept)", !is.na(estimate)) %>%
+  arrange(p.value) %>%
+  head(15)
+```
